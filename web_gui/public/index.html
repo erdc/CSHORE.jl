@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CSHORE.jl — Web GUI (lean)</title>
+
+  <!-- Pico.css — tiny classless framework for nice form defaults -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+
+  <!-- Plotly.js — pinned. Loaded with defer so a slow CDN never blocks
+       the parser from reaching the inline UI script below. -->
+  <script defer
+          src="https://cdn.plot.ly/plotly-2.35.2.min.js"
+          charset="utf-8"
+          onerror="window.__plotlyFailed=true;showBootBanner&&showBootBanner();"></script>
+
+  <style>
+    body  { max-width: 1400px; margin: 0 auto; padding: 0.5rem 1rem; font-size: 0.9rem; }
+    h1    { font-size: 1.4rem; color: #0d47a1; margin: 0.4rem 0; }
+    h2    { font-size: 1.0rem; color: #1976d2; border-bottom: 1px solid #e0e0e0;
+            margin-top: 0.7rem; margin-bottom: 0.4rem; padding-bottom: 2px; }
+    .grid { display: grid; grid-template-columns: minmax(380px, 1fr) 2fr; gap: 1rem; }
+    fieldset    { padding: 0.4rem 0.7rem; margin-bottom: 0.5rem; }
+    fieldset > label { font-size: 0.78rem; margin: 1px 0; display: block; }
+    fieldset > label > input,
+    fieldset > label > select { font-size: 0.82rem; padding: 0.2rem 0.4rem;
+                                height: auto; margin-top: 1px; margin-bottom: 2px; }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 0.4rem; border-bottom: 1px solid #ccc; }
+    .tabs button {
+        background: transparent; border: 0;
+        padding: 0.25rem 0.45rem; margin: 0; cursor: pointer;
+        font-size: 0.72rem; border-bottom: 2px solid transparent;
+        color: #555; white-space: nowrap;
+    }
+    .tabs button.active { color: #0d47a1; border-bottom-color: #0d47a1; font-weight: 600; }
+    .banner-warn { background: #fff3cd; color: #664d03; padding: 0.4rem 0.6rem;
+                   border-radius: 4px; font-size: 0.82rem; }
+    .banner-err  { background: #f8d7da; color: #842029; padding: 0.4rem 0.6rem;
+                   border-radius: 4px; font-size: 0.82rem; }
+    .hidden { display: none !important; }
+    pre.mono { font-size: 0.78rem; background: #f8f9fa; padding: 0.4rem;
+               border-radius: 4px; overflow: auto; max-height: 200px; margin: 0; }
+    button.run { width: 100%; margin-top: 0.5rem; }
+    .plot-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.4rem; margin-bottom: 0.5rem; }
+    .plot-target { width: 100%; height: 320px; }
+    .ens-nbs-row { padding: 0.2rem 0; border-bottom: 1px dotted #eee; }
+    .ens-nbs-row label.ens-cb { font-size: 0.82rem; font-weight: 600; }
+    .ens-nbs-row label.ens-cb input { margin-right: 0.3rem; }
+    .ens-nbs-params { margin-left: 1.4rem; margin-top: 0.15rem; }
+    .ens-nbs-params label { display: inline-block; font-size: 0.74rem; margin: 0 0.4rem 0.15rem 0; color: #444; }
+    .ens-nbs-params label input { width: 4.5em; font-size: 0.76rem; padding: 0.1rem 0.3rem; margin-left: 0.15rem; }
+  </style>
+</head>
+
+<body>
+
+<h1>CSHORE.jl — Web GUI</h1>
+
+<!-- Visible diagnostic for any boot-time JS / CDN failure. -->
+<div id="js-boot-banner" class="banner-err hidden"></div>
+
+<div class="grid">
+  <!-- ============================================================ LEFT: form -->
+  <div>
+    <!-- Tab bar. Vanilla buttons; click handler attached in JS. -->
+    <div class="tabs" id="tabs">
+      <button type="button" data-tab="case"    class="active">Case</button>
+      <button type="button" data-tab="env">Env</button>
+      <button type="button" data-tab="mfx">Sediment</button>
+      <button type="button" data-tab="thermal">Thermal</button>
+      <button type="button" data-tab="nbs">Structures</button>
+      <button type="button" data-tab="params">Params</button>
+      <button type="button" data-tab="ensemble">Ensemble</button>
+      <button type="button" data-tab="nhi">NHI Scoping</button>
+    </div>
+
+    <!-- Case & geometry -->
+    <fieldset data-tab-panel="case">
+      <h2>Case &amp; geometry</h2>
+      <label>Case name <input name="case_name" value="webrun"></label>
+      <label>Profile preset
+        <select name="profile">
+          <option value="planar_beach">planar_beach</option>
+          <option value="beach_dune" selected>beach_dune</option>
+        </select>
+      </label>
+      <div class="row-2">
+        <label>Depth (m below SWL) <input type="number" step="0.1" name="depth_m" value="8.0"></label>
+        <label>Slope (rise/run)    <input type="number" step="0.01" name="slope_rr" value="0.05"></label>
+        <label>Backshore elev. (m) <input type="number" step="0.1"  name="backshore_elev_m" value="2.0"></label>
+        <label>Dune height (m)     <input type="number" step="0.1"  name="dune_m" value="4.0"></label>
+        <label>Grid dx (m)         <input type="number" step="0.1"  name="dx_m" value="1.0"></label>
+      </div>
+      <label>Custom XZ profile (.csv, optional)
+        <input type="file" id="profile-csv" accept=".csv,.txt">
+      </label>
+      <small id="profile-csv-status" style="display:block; color:#555;">
+        Format: two columns <code>x_m, z_m</code> (header row optional). Overrides the preset + depth/slope/backshore/dune fields above.
+      </small>
+      <button type="button" id="profile-csv-clear" class="hidden"
+              style="font-size:0.78rem; padding:0.2rem 0.5rem; margin-top:0.2rem;">
+        Clear loaded profile
+      </button>
+    </fieldset>
+
+    <!-- Environmental Conditions -->
+    <fieldset data-tab-panel="env" class="hidden">
+      <h2>Environmental Conditions</h2>
+      <div class="row-2">
+        <label>Hrms (m)     <input type="number" step="0.1" name="hrms" value="1.0"></label>
+        <label>Tp (s)       <input type="number" step="0.5" name="tp" value="8.0"></label>
+        <label>SWL (m)      <input type="number" step="0.1" name="swl" value="0.5"></label>
+        <label>Duration (h) <input type="number" step="0.5" name="duration_h" value="12.0"></label>
+      </div>
+      <label><input type="checkbox" name="tide_on"> Sinusoidal tide overlay</label>
+      <div class="row-2" data-show-when="tide_on">
+        <label>Tide amplitude (m) <input type="number" step="0.05" name="tide_amp_m" value="0.5"></label>
+        <label>Tide period (h)    <input type="number" step="0.01" name="tide_period_h" value="12.42"></label>
+      </div>
+      <label><input type="checkbox" name="storm_on"> Storm envelope on Hrms</label>
+      <div class="row-2" data-show-when="storm_on">
+        <label>Peak Hrms (m)             <input type="number" step="0.1" name="storm_hrms_peak"    value="3.0"></label>
+        <label>Storm recurrence (days)   <input type="number" step="1"   name="storm_recurrence_d" value="30"></label>
+      </div>
+      <label>Custom wave / water level time series (.csv, optional)
+        <input type="file" id="wave-csv" accept=".csv,.txt">
+      </label>
+      <small id="wave-csv-status" style="display:block; color:#555;">
+        Format: columns <code>time_s, hrms, tp, swl</code> (header row required; column order flexible). Overrides Hrms / Tp / SWL / Duration and the tide/storm overlays above.
+      </small>
+      <button type="button" id="wave-csv-clear" class="hidden"
+              style="font-size:0.78rem; padding:0.2rem 0.5rem; margin-top:0.2rem;">
+        Clear loaded time series
+      </button>
+    </fieldset>
+
+    <!-- Multifraction sediment -->
+    <fieldset data-tab-panel="mfx" class="hidden">
+      <h2>Multifraction sediment</h2>
+      <label>Grain sizes (mm, comma-sep)  <input name="grain_sizes_mm"  value="0.10, 0.20, 0.30, 0.50, 1.00"></label>
+      <label>Mass fractions (comma-sep)   <input name="grain_fractions" value="0.10, 0.20, 0.40, 0.20, 0.10"></label>
+      <small>d50 = mass-weighted mean. Default is a 5-fraction distribution that exercises the multifraction code path; reduce to one entry in each box for a single-grain run. Fractions auto-normalize to sum 1.</small>
+    </fieldset>
+
+    <!-- Thermal -->
+    <fieldset data-tab-panel="thermal" class="hidden">
+      <h2>Thermal / permafrost</h2>
+      <label><input type="checkbox" name="thermal_on"> Enable thermal model</label>
+      <div class="row-3" data-show-when="thermal_on">
+        <label>T_air (°C)   <input type="number" step="0.5" name="T_air_C"   value="-5.0"></label>
+        <label>T_water (°C) <input type="number" step="0.5" name="T_water_C" value="0.0"></label>
+        <label>T_init (°C)  <input type="number" step="0.5" name="T_init_C"  value="-2.0"></label>
+      </div>
+    </fieldset>
+
+    <!-- Structures -->
+    <fieldset data-tab-panel="nbs" class="hidden">
+      <h2>Structures</h2>
+      <label>Feature
+        <select name="nbs_type">
+          <option value="none" selected>none</option>
+          <optgroup label="Hard / engineered">
+            <option value="breakwater">breakwater</option>
+            <option value="beach_nourishment">beach_nourishment</option>
+            <option value="gravel_revetment">gravel_revetment</option>
+            <option value="rock_revetment">rock_revetment</option>
+          </optgroup>
+          <optgroup label="Marsh vegetation">
+            <option value="low_marsh">low_marsh (S. alterniflora / Sporobolus)</option>
+            <option value="high_marsh">high_marsh (S. patens / Distichlis / Juncus)</option>
+            <option value="marsh_shrub">marsh_shrub (Iva / Baccharis)</option>
+            <option value="phragmites">phragmites (invasive)</option>
+          </optgroup>
+          <optgroup label="Mangrove">
+            <option value="mangrove">mangrove (Rhizophora / Avicennia)</option>
+          </optgroup>
+          <optgroup label="Dune / beach vegetation">
+            <option value="dune_grass">dune_grass (Ammophila / Uniola)</option>
+            <option value="dune_shrub">dune_shrub (Lupinus / Baccharis pilularis)</option>
+            <option value="beach_grass">beach_grass</option>
+            <option value="beach_forbs">beach_forbs (Sesuvium / Cakile / Ipomoea)</option>
+          </optgroup>
+          <optgroup label="Submerged aquatic vegetation">
+            <option value="eelgrass">eelgrass (Zostera marina)</option>
+            <option value="kelp">kelp (Laminaria / Saccharina)</option>
+          </optgroup>
+        </select>
+      </label>
+      <!-- Only the fields a given structure actually uses are visible.
+           Vegetation kinds share the density / height / Cd block;
+           porous kinds (gravel/rock revetment) share porosity / Dn50. -->
+      <div class="row-2">
+        <!-- Compact alias: all vegetation kinds share z-band, density, height, Cd -->
+        <!-- VEG = low_marsh,high_marsh,marsh_shrub,phragmites,mangrove,dune_grass,dune_shrub,beach_grass,beach_forbs,eelgrass,kelp -->
+        <label data-show-when-type="breakwater,beach_nourishment,gravel_revetment,rock_revetment,low_marsh,high_marsh,marsh_shrub,phragmites,mangrove,dune_grass,dune_shrub,beach_grass,beach_forbs,eelgrass,kelp">z_min (m rel SWL) <input type="number" step="0.1"  name="nbs_z_min"     value="-0.5"></label>
+        <label data-show-when-type="breakwater,beach_nourishment,gravel_revetment,rock_revetment,low_marsh,high_marsh,marsh_shrub,phragmites,mangrove,dune_grass,dune_shrub,beach_grass,beach_forbs,eelgrass,kelp">z_max (m rel SWL) <input type="number" step="0.1"  name="nbs_z_max"     value="1.0"></label>
+        <label data-show-when-type="breakwater">Crest elev. (m)                                       <input type="number" step="0.1"  name="nbs_crest_z"   value="2.0"></label>
+        <label data-show-when-type="beach_nourishment">Nourishment Volume                                                     <input type="number" step="5"    name="nbs_volume_m3" value="20"></label>
+        <label data-show-when-type="gravel_revetment,rock_revetment">Layer thickness (m)                                       <input type="number" step="0.1"  name="nbs_thickness" value="1.0"></label>
+        <label data-show-when-type="gravel_revetment,rock_revetment">Porosity                                          <input type="number" step="0.05" name="nbs_porosity"  value="0.4"></label>
+        <label data-show-when-type="gravel_revetment,rock_revetment">Stone Dn50 (m)                                    <input type="number" step="0.01" name="nbs_stone_d"   value="0.05"></label>
+        <label data-show-when-type="low_marsh,high_marsh,marsh_shrub,phragmites,mangrove,dune_grass,dune_shrub,beach_grass,beach_forbs,eelgrass,kelp">Stem density (stems/m²)                                    <input type="number" step="10"   name="nbs_density"   value="200"></label>
+        <label data-show-when-type="low_marsh,high_marsh,marsh_shrub,phragmites,mangrove,dune_grass,dune_shrub,beach_grass,beach_forbs,eelgrass,kelp">Stem height (m)                                            <input type="number" step="0.05" name="nbs_height"    value="0.3"></label>
+        <label data-show-when-type="low_marsh,high_marsh,marsh_shrub,phragmites,mangrove,dune_grass,dune_shrub,beach_grass,beach_forbs,eelgrass,kelp">Drag coefficient C_d                                       <input type="number" step="0.1"  name="nbs_cd"        value="1.0"></label>
+      </div>
+    </fieldset>
+
+    <!-- Free model parameters -->
+    <fieldset data-tab-panel="params" class="hidden">
+      <h2>Free model parameters</h2>
+      <div class="row-2">
+        <label>effb (breaking diss.) <input type="number" step="0.001" name="effb"   value="0.005"></label>
+        <label>efff (friction diss.) <input type="number" step="0.001" name="efff"   value="0.005"></label>
+        <label>blp (bedload)         <input type="number" step="0.001" name="blp"    value="0.002"></label>
+        <label>slp (suspended)       <input type="number" step="0.05"  name="slp"    value="0.2"></label>
+        <label>tanphi                <input type="number" step="0.05"  name="tanphi" value="0.63"></label>
+      </div>
+    </fieldset>
+
+    <!-- Ensemble: vary one numeric knob at a time, baseline + N members.
+         (NbS-type comparison lives in its own NHI Scoping tab.) -->
+    <fieldset data-tab-panel="ensemble" class="hidden">
+      <h2>Ensemble (1-knob sweep)</h2>
+      <label>Sweep parameter
+        <select id="ens-param">
+          <option value="">— pick one —</option>
+          <option value="effb">effb (breaking dissipation)</option>
+          <option value="efff">efff (friction dissipation)</option>
+          <option value="blp">blp (bedload)</option>
+          <option value="slp">slp (suspended)</option>
+          <option value="tanphi">tanphi</option>
+          <option value="wave_scale">wave height ×scale</option>
+          <option value="period_scale">wave period ×scale</option>
+          <option value="temp_offset">temperature offset (°C, all of T_air/T_water/T_init)</option>
+        </select>
+      </label>
+
+      <div id="ens-numeric" class="hidden">
+        <div class="row-3">
+          <label>Min          <input type="number" id="ens-min" step="any" value=""></label>
+          <label>Max          <input type="number" id="ens-max" step="any" value=""></label>
+          <label>N scenarios  <input type="number" id="ens-n"   min="1" max="10" step="1" value="5"></label>
+        </div>
+        <small id="ens-preview" style="display:block; color:#555;">Values: —</small>
+      </div>
+
+      <label style="margin-top:0.4rem;">Effectiveness threshold (m, elevation above which erosion is counted)
+        <input type="number" step="0.1" id="ens-threshold" value="0.0">
+      </label>
+      <small style="display:block; color:#555;">
+        Volume eroded where the initial bed sits <em>above</em> this elevation.
+        Default 0 m = above SWL (water-line erosion). Set higher to focus on dune-zone retreat.
+      </small>
+      <button type="button" id="ens-run" class="run" style="margin-top:0.4rem;">Run ensemble</button>
+    </fieldset>
+
+    <!-- NHI Scoping: standalone NbS comparison. Each checked kind = one
+         member; runs alongside the baseline and shares the same
+         /run_ensemble endpoint as the numeric sweep, but the result
+         lands in its own card so the two views don't clobber each other. -->
+    <fieldset data-tab-panel="nhi" class="hidden">
+      <h2>NHI Scoping</h2>
+      <small style="display:block; color:#555; margin-bottom:0.3rem;">
+        Natural &amp; Hybrid Infrastructure comparison. Check each option to
+        evaluate as a scoping member, edit its parameters, and the baseline
+        (your Structures-tab setup) will be run alongside. Up to 10 selections.
+      </small>
+      <div id="nhi-list"></div>
+      <label style="margin-top:0.4rem;">Effectiveness threshold (m, elevation above which erosion is counted)
+        <input type="number" step="0.1" id="nhi-threshold" value="0.0">
+      </label>
+      <small style="display:block; color:#555;">
+        Default 0 m = water-line erosion. Set higher to focus on dune / bluff retreat.
+      </small>
+      <button type="button" id="nhi-run" class="run" style="margin-top:0.4rem;">Run NHI scoping</button>
+    </fieldset>
+
+    <div id="warn-banner"  class="banner-warn hidden"></div>
+    <div id="error-banner" class="banner-err  hidden"></div>
+
+    <button id="run-btn" type="button" class="run">Run simulation</button>
+    <small style="display:block; margin-top:0.25rem; color:#666;">
+      Tip: hover over any plot and click the camera icon in its toolbar to save it as a PNG.
+    </small>
+
+    <h2>Status</h2>
+    <pre id="status-pane" class="mono">(idle)</pre>
+
+    <h2>Recent runs</h2>
+    <pre id="history-pane" class="mono">(no runs yet)</pre>
+  </div>
+
+  <!-- ============================================================ RIGHT: results -->
+  <div>
+    <!-- Ensemble (numeric-sweep) results land here. -->
+    <div class="plot-card hidden" id="ens-card">
+      <h2>Ensemble — final cross-shore profiles</h2>
+      <div id="plot-ens-profiles" class="plot-target" style="height:360px;"></div>
+      <h2>Ensemble — erosion-reduction effectiveness</h2>
+      <div id="plot-ens-bars" class="plot-target" style="height:300px;"></div>
+      <pre id="ens-summary" class="mono"></pre>
+    </div>
+
+    <!-- NHI Scoping results land here. Separate card so ensemble +
+         NHI runs don't overwrite each other's plots. -->
+    <div class="plot-card hidden" id="nhi-card">
+      <h2>NHI Scoping — final cross-shore profiles</h2>
+      <div id="plot-nhi-profiles" class="plot-target" style="height:360px;"></div>
+      <h2>NHI Scoping — erosion-reduction effectiveness</h2>
+      <div id="plot-nhi-bars" class="plot-target" style="height:300px;"></div>
+      <pre id="nhi-summary" class="mono"></pre>
+    </div>
+
+    <div class="plot-card">
+      <h2>Bed Elevation Change</h2>
+      <div id="plot-bed" class="plot-target"></div>
+      <h2>Spatio-Temporal Bed Elevation Change</h2>
+      <div id="plot-dz"  class="plot-target" style="height:260px;"></div>
+      <pre id="volume-text" class="mono"></pre>
+    </div>
+
+    <div class="plot-card">
+      <h2>Wave &amp; Water-Level Envelope</h2>
+      <div id="plot-hydro" class="plot-target" style="height:300px;"></div>
+      <small style="display:block; color:#555;">
+        Blue band = water-surface envelope (min↔max over the run).
+        Red band = ±Hrms<sub>max</sub> around the highest water level.
+      </small>
+    </div>
+
+    <div class="plot-card">
+      <h2>Sediment Mixing</h2>
+      <div id="plot-mix-comp" class="plot-target" style="height:280px;"></div>
+      <div id="plot-mix-d50"  class="plot-target" style="height:280px;"></div>
+      <small id="mix-empty">(empty until a multifraction run completes)</small>
+    </div>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+// Vanilla-JS UI controller. No reactive framework — every interaction is a
+// direct event listener and every DOM update is explicit. This is verbose
+// but it has zero runtime dependencies beyond Plotly (and the page still
+// loads and submits even if Plotly fails — plotting just degrades gracefully).
+// =============================================================================
+
+// ---- API base URL -----------------------------------------------------------
+// All POSTs (/run, /run_ensemble) go to `API_BASE + path`. When this page is
+// served by the same Julia HTTP server that runs the model (default Fly.io
+// deployment), API_BASE is the empty string — fetches go to relative URLs on
+// the same origin.
+//
+// When the page is served by a static host such as GitHub Pages, drop a tiny
+// inline override BEFORE this script tag in the deployed copy:
+//
+//     <script>window.CSHORE_API_BASE = "https://cshore-jl-webapp.fly.dev";<\/script>
+//     <script src="…this file…"><\/script>
+//
+// (NOTE: the `<\/script>` escapes above are deliberate. A literal
+// `<\/script>` inside this inline JS would close THIS script block
+// prematurely — HTML parsing doesn't honour JS comment syntax, so the
+// closing tag is matched even when it appears in a `//` comment line.)
+//
+// The Pages-deploy workflow injects exactly that snippet. The backend must
+// emit CORS headers (Access-Control-Allow-Origin: *) — which `app.jl` does.
+const API_BASE = (typeof window !== 'undefined' && window.CSHORE_API_BASE) || '';
+
+// ---- Boot-time diagnostic banner -------------------------------------------
+window.__bootErrors = [];
+function pushBootError(msg) {
+  window.__bootErrors.push(msg);
+  showBootBanner();
+}
+function showBootBanner() {
+  var el = document.getElementById('js-boot-banner');
+  if (!el) return;
+  var lines = [];
+  if (window.__plotlyFailed) lines.push('Plotly failed to load (plots disabled).');
+  lines = lines.concat(window.__bootErrors);
+  if (!lines.length) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  el.textContent = '⚠ ' + lines.join(' · ');
+}
+window.addEventListener('error', function (ev) {
+  pushBootError((ev.message || 'unknown') +
+                (ev.filename ? ' @ ' + ev.filename + ':' + ev.lineno : ''));
+});
+window.addEventListener('unhandledrejection', function (ev) {
+  pushBootError('Unhandled rejection: ' +
+                ((ev.reason && ev.reason.message) || ev.reason));
+});
+
+// ---- Tab bar ----------------------------------------------------------------
+function setupTabs() {
+  var bar = document.getElementById('tabs');
+  bar.querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      bar.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      var target = b.getAttribute('data-tab');
+      document.querySelectorAll('[data-tab-panel]').forEach(function (panel) {
+        panel.classList.toggle('hidden', panel.getAttribute('data-tab-panel') !== target);
+      });
+    });
+  });
+}
+
+// ---- Conditional sub-form visibility ---------------------------------------
+// data-show-when="checkboxName"          → show only when that checkbox is checked
+// data-show-when-type="csv,of,nbs_types" → show only when nbs_type matches one
+function setupConditionals() {
+  document.querySelectorAll('[data-show-when]').forEach(function (el) {
+    var name = el.getAttribute('data-show-when');
+    var cb = document.querySelector('input[name="' + name + '"]');
+    if (!cb) return;
+    function update() { el.classList.toggle('hidden', !cb.checked); }
+    cb.addEventListener('change', update); update();
+  });
+
+  var typeSelect = document.querySelector('[name="nbs_type"]');
+  if (typeSelect) {
+    var typedNodes = document.querySelectorAll('[data-show-when-type]');
+    function updateTyped() {
+      var current = typeSelect.value;
+      typedNodes.forEach(function (el) {
+        var allowed = el.getAttribute('data-show-when-type')
+                        .split(',').map(function (s) { return s.trim(); });
+        el.classList.toggle('hidden', allowed.indexOf(current) < 0);
+      });
+    }
+    typeSelect.addEventListener('change', updateTyped);
+    typeSelect.addEventListener('input',  updateTyped);
+    updateTyped();
+
+    // Sensible per-structure defaults on type change. Without this the
+    // user would have to remember to flip the z-band / crest / drag /
+    // porosity params each time they switch types.
+    // Defaults pre-filled when the user switches NbS type. Vegetation
+    // entries mirror NBS_VEGETATION_PARAMS (src/presets/nbs.jl): Cd, stem
+    // density (stems/m²), canopy height (m), and an indicative z-band
+    // (m relative to SWL) per species/category.
+    var fieldDefaults = {
+      // Hard / engineered
+      breakwater:        { nbs_z_min: '-0.5', nbs_z_max:  '1.0', nbs_crest_z: '2.0' },
+      beach_nourishment: { nbs_z_min: '-0.5', nbs_z_max:  '1.0', nbs_volume_m3: '20' },
+      gravel_revetment:  { nbs_z_min: '-0.5', nbs_z_max:  '2.0',
+                           nbs_thickness:  '1.0', nbs_porosity: '0.4',  nbs_stone_d:  '0.05' },
+      rock_revetment:    { nbs_z_min: '-0.5', nbs_z_max:  '2.0',
+                           nbs_thickness:  '2.0', nbs_porosity: '0.35', nbs_stone_d:  '0.80' },
+      // Marsh vegetation
+      low_marsh:         { nbs_z_min: '-0.3', nbs_z_max:  '1.0',
+                           nbs_density:  '400',  nbs_height: '1.00', nbs_cd: '1.5' },
+      high_marsh:        { nbs_z_min:  '0.3', nbs_z_max:  '1.2',
+                           nbs_density: '1000',  nbs_height: '0.30', nbs_cd: '1.0' },
+      marsh_shrub:       { nbs_z_min:  '0.0', nbs_z_max:  '1.5',
+                           nbs_density:   '50',  nbs_height: '1.50', nbs_cd: '0.6' },
+      phragmites:        { nbs_z_min: '-0.3', nbs_z_max:  '1.5',
+                           nbs_density:  '200',  nbs_height: '2.50', nbs_cd: '3.0' },
+      // Mangrove
+      mangrove:          { nbs_z_min: '-1.0', nbs_z_max:  '1.5',
+                           nbs_density:    '2',  nbs_height: '2.00', nbs_cd: '1.5' },
+      // Dune / beach vegetation
+      dune_grass:        { nbs_z_min:  '1.5', nbs_z_max:  '8.0',
+                           nbs_density:  '300',  nbs_height: '0.70', nbs_cd: '0.5' },
+      dune_shrub:        { nbs_z_min:  '2.0', nbs_z_max:  '8.0',
+                           nbs_density:   '30',  nbs_height: '2.00', nbs_cd: '1.0' },
+      beach_grass:       { nbs_z_min:  '0.5', nbs_z_max:  '3.0',
+                           nbs_density:  '150',  nbs_height: '0.40', nbs_cd: '0.6' },
+      beach_forbs:       { nbs_z_min:  '0.3', nbs_z_max:  '2.0',
+                           nbs_density:  '100',  nbs_height: '0.15', nbs_cd: '0.5' },
+      // Submerged aquatic vegetation
+      eelgrass:          { nbs_z_min: '-2.0', nbs_z_max: '-0.2',
+                           nbs_density:  '500',  nbs_height: '0.50', nbs_cd: '0.4' },
+      kelp:              { nbs_z_min: '-6.0', nbs_z_max: '-2.0',
+                           nbs_density:   '10',  nbs_height: '2.00', nbs_cd: '0.3' },
+    };
+    typeSelect.addEventListener('change', function () {
+      var d = fieldDefaults[this.value];
+      if (!d) return;
+      Object.keys(d).forEach(function (name) {
+        var f = document.querySelector('[name="' + name + '"]');
+        if (!f) return;
+        f.value = d[name];
+        f.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+  }
+}
+
+// ---- Form-value scraping ----------------------------------------------------
+// ---- CSV upload state -------------------------------------------------------
+// Holds parsed arrays from the two optional CSV uploads. readForm() appends
+// these to the /run POST body when present so the server uses them instead
+// of generating the profile from a preset or building constant_waves.
+var csvState = { profile: null, wave: null };
+
+// Tokenize a CSV / whitespace-delimited row, drop empty tokens.
+function _splitRow(line) {
+  return line.split(/[,\t]+/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length; });
+}
+// Detect a header row by checking whether ANY token is non-numeric.
+function _isHeader(tokens) {
+  return tokens.some(function (t) { return isNaN(parseFloat(t)); });
+}
+
+function parseProfileCSV(text) {
+  var lines = text.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(function (l) { return l.length; });
+  if (!lines.length) throw new Error('empty file');
+  var startIdx = 0;
+  if (_isHeader(_splitRow(lines[0]))) startIdx = 1;
+  var x = [], z = [];
+  for (var i = startIdx; i < lines.length; i++) {
+    var toks = _splitRow(lines[i]).map(Number);
+    if (toks.length < 2 || !isFinite(toks[0]) || !isFinite(toks[1])) continue;
+    x.push(toks[0]); z.push(toks[1]);
+  }
+  if (x.length < 2) throw new Error('need at least 2 valid (x, z) rows');
+  return { x: x, z: z };
+}
+
+function parseWaveCSV(text) {
+  var lines = text.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(function (l) { return l.length; });
+  if (!lines.length) throw new Error('empty file');
+  // Locate columns by header. We require a header so column order can be flexible.
+  var head = _splitRow(lines[0]);
+  if (!_isHeader(head)) {
+    throw new Error('first row must be a header naming the columns (time / hrms / tp / swl)');
+  }
+  var lower = head.map(function (s) { return s.toLowerCase(); });
+  function findCol() {
+    for (var k = 0; k < arguments.length; k++) {
+      var needle = arguments[k];
+      for (var i = 0; i < lower.length; i++) {
+        if (lower[i].indexOf(needle) >= 0) return i;
+      }
+    }
+    return -1;
+  }
+  var iT = findCol('time', 't_s');
+  var iH = findCol('hrms', 'h_rms', 'hs');
+  var iP = findCol('tp', 'period', 't_p');
+  var iS = findCol('swl', 'eta', 'surge', 'wl');
+  if (iT < 0 || iH < 0) throw new Error('header must include a "time" column and an "hrms" column');
+  var t = [], h = [], p = [], s = [];
+  for (var i = 1; i < lines.length; i++) {
+    var toks = _splitRow(lines[i]).map(Number);
+    if (toks.length <= Math.max(iT, iH)) continue;
+    var tv = toks[iT], hv = toks[iH];
+    if (!isFinite(tv) || !isFinite(hv)) continue;
+    t.push(tv); h.push(hv);
+    p.push(iP >= 0 && isFinite(toks[iP]) ? toks[iP] : NaN);
+    s.push(iS >= 0 && isFinite(toks[iS]) ? toks[iS] : NaN);
+  }
+  if (t.length < 2) throw new Error('need at least 2 valid data rows');
+  // Drop NaN-only fallbacks so the server doesn't see NaNs.
+  if (p.every(function (v) { return !isFinite(v); })) p = null;
+  if (s.every(function (v) { return !isFinite(v); })) s = null;
+  var out = { t: t, hrms: h };
+  if (p) out.tp = p;
+  if (s) out.swl = s;
+  return out;
+}
+
+function setupCsvUploads() {
+  function wire(inputId, statusId, clearId, parser, stateKey, labelFor) {
+    var input  = document.getElementById(inputId);
+    var status = document.getElementById(statusId);
+    var clear  = document.getElementById(clearId);
+    if (!input) return;
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          var parsed = parser(e.target.result);
+          csvState[stateKey] = parsed;
+          var n = (parsed.x || parsed.t).length;
+          status.textContent = 'Loaded ' + file.name + ' — ' + n + ' ' + labelFor + '. ' +
+              'Overrides the form fields above; clear to revert.';
+          status.style.color = '#0b7a3a';
+          clear.classList.remove('hidden');
+        } catch (err) {
+          csvState[stateKey] = null;
+          status.textContent = '✗ ' + file.name + ': ' + (err.message || err);
+          status.style.color = '#842029';
+          clear.classList.remove('hidden');
+        }
+      };
+      reader.readAsText(file);
+    });
+    clear.addEventListener('click', function () {
+      csvState[stateKey] = null;
+      input.value = '';
+      clear.classList.add('hidden');
+      status.style.color = '#555';
+      status.textContent = status.dataset.originalText || status.textContent;
+    });
+    // Remember the original help text so Clear can restore it.
+    status.dataset.originalText = status.textContent;
+  }
+  wire('profile-csv', 'profile-csv-status', 'profile-csv-clear',
+       parseProfileCSV, 'profile', '(x, z) points');
+  wire('wave-csv',    'wave-csv-status',    'wave-csv-clear',
+       parseWaveCSV,    'wave',    'time samples');
+}
+
+// Reads every named input/select into a plain object, coercing numeric inputs
+// with Number() and checkboxes to booleans. The keys match what app.jl
+// expects in the /run POST body. Loaded CSV arrays (if any) are attached
+// under the well-known keys profile_csv / wave_csv.
+function readForm() {
+  var out = {};
+  document.querySelectorAll('input[name], select[name]').forEach(function (el) {
+    var key = el.getAttribute('name');
+    if (el.type === 'checkbox') { out[key] = el.checked; return; }
+    if (el.type === 'number')   { out[key] = Number(el.value); return; }
+    out[key] = el.value;
+  });
+  if (csvState.profile) out.profile_csv = csvState.profile;
+  if (csvState.wave)    out.wave_csv    = csvState.wave;
+  return out;
+}
+
+// ---- Inline validation ------------------------------------------------------
+function validate(p) {
+  var msgs = [];
+  var hasProfileCsv = !!csvState.profile;
+  var hasWaveCsv    = !!csvState.wave;
+  if (!hasWaveCsv     && p.duration_h <= 0) msgs.push('Duration must be > 0 h.');
+  if (!hasProfileCsv  && p.dx_m       <= 0) msgs.push('Grid dx must be > 0 m.');
+  if (!hasProfileCsv  && p.depth_m    <= 0) msgs.push('Depth must be > 0 m.');
+  if (p.nbs_type === 'beach_nourishment' &&
+      (p.nbs_volume_m3 === undefined || p.nbs_volume_m3 <= 0)) {
+    msgs.push('Nourishment volume must be > 0 m³/m.');
+  }
+  if (p.nbs_type && p.nbs_type !== 'none' && p.nbs_z_min >= p.nbs_z_max) {
+    msgs.push('NBS z_min must be < z_max.');
+  }
+  var gs = String(p.grain_sizes_mm || '').split(',').filter(function (s) { return s.trim(); }).map(Number);
+  var gf = String(p.grain_fractions || '').split(',').filter(function (s) { return s.trim(); }).map(Number);
+  if (gs.length !== gf.length) {
+    msgs.push('Grain sizes (' + gs.length + ') and fractions (' + gf.length + ') must match.');
+  }
+  if (gf.length) {
+    var s = gf.reduce(function (a, b) { return a + b; }, 0);
+    if (Math.abs(s - 1.0) > 0.05) {
+      msgs.push('Fractions sum to ' + s.toFixed(3) + ' — should be ≈ 1.');
+    }
+  }
+  return msgs;
+}
+function setupLiveValidation() {
+  var warn = document.getElementById('warn-banner');
+  function refresh() {
+    var msgs = validate(readForm());
+    warn.textContent = msgs.length ? '⚠ ' + msgs.join(' · ') : '';
+    warn.classList.toggle('hidden', !msgs.length);
+  }
+  document.querySelectorAll('input[name], select[name]').forEach(function (el) {
+    el.addEventListener('input',  refresh);
+    el.addEventListener('change', refresh);
+  });
+  refresh();
+}
+
+// ---- Run handler ------------------------------------------------------------
+async function runSimulation() {
+  var btn    = document.getElementById('run-btn');
+  var status = document.getElementById('status-pane');
+  var errEl  = document.getElementById('error-banner');
+  var histEl = document.getElementById('history-pane');
+  var volEl  = document.getElementById('volume-text');
+
+  var params = readForm();
+  var msgs   = validate(params);
+  if (msgs.length) {
+    errEl.textContent = '✗ Fix validation errors first: ' + msgs.join(' · ');
+    errEl.classList.remove('hidden');
+    return;
+  }
+  errEl.classList.add('hidden');
+  btn.disabled    = true;
+  btn.textContent = 'Running…';
+  status.textContent = 'Running…';
+
+  try {
+    var res  = await fetch(API_BASE + '/run', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(params),
+    });
+    var data;
+    try { data = await res.json(); }
+    catch (_) { throw new Error('Server returned non-JSON (HTTP ' + res.status + ')'); }
+    if (!res.ok || data.status === 'error') {
+      throw new Error(data.message || ('Server returned HTTP ' + res.status));
+    }
+    status.textContent = 'Done in ' + data.elapsed_s.toFixed(1) + 's · ' + data.workdir;
+    volEl.textContent  = data.volume_text || '';
+    var ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+    histEl.textContent =
+        ts + '  ' + data.elapsed_s.toFixed(1) + 's  ' + params.case_name +
+        (histEl.textContent === '(no runs yet)' ? '' : '\n' + histEl.textContent);
+    if (typeof Plotly !== 'undefined') renderPlots(data);
+    else pushBootError('Plotly not available — skipping chart render.');
+  } catch (e) {
+    errEl.textContent = '✗ ' + ((e && e.message) || e);
+    errEl.classList.remove('hidden');
+    status.textContent = 'ERROR';
+    console.error('runSimulation failed:', e);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Run simulation';
+  }
+}
+
+// ---- Plotly rendering -------------------------------------------------------
+function viridis(i, n) {
+  var c = ['#440154', '#3b528b', '#21918c', '#5ec962', '#fde725'];
+  if (n <= 1) return c[0];
+  var t = (i / (n - 1)) * (c.length - 1);
+  var k = Math.min(Math.floor(t), c.length - 2);
+  return c[k];
+}
+
+function renderPlots(d) {
+  // ---- Bed snapshots --------------------------------------------------
+  var bedTraces = d.plot_z_snapshots.map(function (z, i) {
+    var last = (i === d.plot_z_snapshots.length - 1);
+    var tag  = i === 0 ? 'initial' :
+               last    ? 'final (' + d.plot_times_h[i].toFixed(1) + ' h)' :
+                         d.plot_times_h[i].toFixed(1) + ' h';
+    return { x: d.plot_x, y: z, mode: 'lines', name: tag, type: 'scatter',
+             line: { color: viridis(i, d.plot_z_snapshots.length), width: 2 } };
+  });
+  bedTraces.push({ x: [d.plot_x[0], d.plot_x[d.plot_x.length - 1]],
+                   y: [d.plot_swl, d.plot_swl],
+                   mode: 'lines', name: 'SWL', type: 'scatter',
+                   line: { color: '#1976d2', width: 1, dash: 'dot' } });
+  Plotly.newPlot('plot-bed', bedTraces, {
+      xaxis: { title: 'Cross-shore distance (m)' },
+      yaxis: { title: 'Elevation (m)' },
+      margin: { t: 8, r: 24, b: 40, l: 50 },
+      legend: { x: 1, y: 1, xanchor: 'right' },
+  }, { responsive: true, displaylogo: false, displayModeBar: true, toImageButtonOptions: { format: 'png', scale: 2 } });
+
+  // ---- Δz heatmap -----------------------------------------------------
+  if (d.plot_dz_rows && d.plot_dz_rows.length > 0) {
+    var zmax = 1e-6;
+    d.plot_dz_rows.forEach(function (row) {
+      row.forEach(function (v) { if (Math.abs(v) > zmax) zmax = Math.abs(v); });
+    });
+    Plotly.newPlot('plot-dz', [{
+        type: 'heatmap', x: d.plot_x, y: d.plot_times_full, z: d.plot_dz_rows,
+        zmin: -zmax, zmax: zmax, colorscale: 'RdBu', reversescale: true,
+        colorbar: { title: 'Δz (m)' },
+    }], {
+        xaxis: { title: 'Cross-shore distance (m)' },
+        yaxis: { title: 'Time (h)' },
+        margin: { t: 8, r: 24, b: 40, l: 50 },
+    }, { responsive: true, displaylogo: false, displayModeBar: true, toImageButtonOptions: { format: 'png', scale: 2 } });
+  } else {
+    Plotly.purge('plot-dz');
+  }
+
+  // ---- Mixing composition + d50 ---------------------------------------
+  var mixEmpty = document.getElementById('mix-empty');
+  if (d.has_mixing && d.mix_x && d.mix_x.length > 0) {
+    mixEmpty.classList.add('hidden');
+    var traces = d.mix_surface_composition.map(function (col, k) {
+      return { x: d.mix_x, y: col, type: 'scatter', mode: 'lines',
+               stackgroup: 'comp', name: d.mix_grain_sizes_mm[k].toFixed(3) + ' mm' };
+    });
+    Plotly.newPlot('plot-mix-comp', traces, {
+        xaxis: { title: 'Cross-shore distance (m)' },
+        yaxis: { title: 'Mass fraction', range: [0, 1] },
+        margin: { t: 8, r: 24, b: 40, l: 50 },
+        legend: { x: 1, y: 1, xanchor: 'right' },
+    }, { responsive: true, displaylogo: false, displayModeBar: true, toImageButtonOptions: { format: 'png', scale: 2 } });
+
+    if (d.mix_d50_rows && d.mix_d50_rows.length > 0) {
+      Plotly.newPlot('plot-mix-d50', [{
+          type: 'heatmap', x: d.mix_x, y: d.mix_times_h, z: d.mix_d50_rows,
+          colorscale: 'Plasma', colorbar: { title: 'd50 (mm)' },
+      }], {
+          xaxis: { title: 'Cross-shore distance (m)' },
+          yaxis: { title: 'Time (h)' },
+          margin: { t: 8, r: 24, b: 40, l: 50 },
+      }, { responsive: true, displaylogo: false, displayModeBar: true, toImageButtonOptions: { format: 'png', scale: 2 } });
+    } else {
+      Plotly.purge('plot-mix-d50');
+    }
+  } else {
+    mixEmpty.classList.remove('hidden');
+    Plotly.purge('plot-mix-comp');
+    Plotly.purge('plot-mix-d50');
+  }
+
+  // ---- Wave / water-level envelope --------------------------------------
+  renderHydroEnvelope(d);
+}
+
+function renderHydroEnvelope(d) {
+  if (!d.hydro_x || !d.hydro_wl_max || !d.hydro_wl_min) {
+    Plotly.purge('plot-hydro');
+    return;
+  }
+  var x     = d.hydro_x;
+  var zb    = d.hydro_zb;
+  var wlMin = d.hydro_wl_min;
+  var wlMax = d.hydro_wl_max;
+  var hMax  = d.hydro_hrms_max || x.map(function () { return 0; });
+  var crest = wlMax.map(function (v, i) { return v + hMax[i]; });
+  // Plotly fills `tonexty` toward the immediately-prior trace, so stacking
+  // wlMin → wlMax → crest produces two shaded bands sharing edges.
+  var traces = [
+    { x: x, y: zb,    name: 'Bed (initial)',
+      mode: 'lines',  type: 'scatter',
+      line: { color: '#5c4033', width: 2 } },
+    { x: x, y: wlMin, name: 'Min water level',
+      mode: 'lines',  type: 'scatter',
+      line: { color: 'rgba(30,90,180,0.5)', width: 1 } },
+    { x: x, y: wlMax, name: 'Max water level',
+      mode: 'lines',  type: 'scatter',
+      line: { color: 'rgba(30,90,180,0.85)', width: 1 },
+      fill: 'tonexty', fillcolor: 'rgba(60,130,220,0.25)' },
+    { x: x, y: crest, name: 'Max WL + Hrmsₘₐₓ',
+      mode: 'lines',  type: 'scatter',
+      line: { color: 'rgba(200,40,40,0.6)', dash: 'dot', width: 1 },
+      fill: 'tonexty', fillcolor: 'rgba(220,60,60,0.15)' },
+  ];
+  Plotly.newPlot('plot-hydro', traces, {
+      xaxis: { title: 'Cross-shore distance (m)' },
+      yaxis: { title: 'Elevation (m)' },
+      margin: { t: 8, r: 24, b: 40, l: 50 },
+      legend: { x: 1, y: 0, xanchor: 'right', yanchor: 'bottom' },
+  }, { responsive: true, displaylogo: false, displayModeBar: true,
+       toImageButtonOptions: { format: 'png', scale: 2 } });
+}
+
+// ---- Ensemble ---------------------------------------------------------------
+// Standard ranges per sweep param. The UI auto-populates Min/Max/N from
+// this table the moment the user picks the param, and they can edit
+// before running.
+var ENS_MAX = 10;
+var sweepDefaults = {
+  effb:         { min: 0.001,  max: 0.02,  n: 5 },
+  efff:         { min: 0.001,  max: 0.02,  n: 5 },
+  blp:          { min: 0.0005, max: 0.005, n: 5 },
+  slp:          { min: 0.05,   max: 0.5,   n: 5 },
+  tanphi:       { min: 0.3,    max: 1.0,   n: 5 },
+  wave_scale:   { min: 0.5,    max: 2.0,   n: 5 },
+  period_scale: { min: 0.7,    max: 1.5,   n: 5 },
+  temp_offset:  { min: -3.0,   max: 3.0,   n: 5 },
+};
+
+// Per-NHI-kind editable fields shown when the user checks that kind on
+// the NHI Scoping tab. `param` matches the server-side params key;
+// `val` is the canonical default (matches fieldDefaults above).
+var nhiKinds = {
+  breakwater:        [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -0.5 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  1.0 },
+                      { param: 'nbs_crest_z',   label: 'crest',     step: 0.1,  val:  2.0 }],
+  beach_nourishment: [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -0.5 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  1.0 },
+                      { param: 'nbs_volume_m3', label: 'volume',    step: 5,    val:   20 }],
+  gravel_revetment:  [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -0.5 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  2.0 },
+                      { param: 'nbs_thickness', label: 'thickness', step: 0.1,  val:  1.0 },
+                      { param: 'nbs_porosity',  label: 'porosity',  step: 0.05, val:  0.4 },
+                      { param: 'nbs_stone_d',   label: 'Dn50',      step: 0.01, val: 0.05 }],
+  rock_revetment:    [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -0.5 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  2.0 },
+                      { param: 'nbs_thickness', label: 'thickness', step: 0.1,  val:  2.0 },
+                      { param: 'nbs_porosity',  label: 'porosity',  step: 0.05, val: 0.35 },
+                      { param: 'nbs_stone_d',   label: 'Dn50',      step: 0.05, val: 0.80 }],
+  // Dune / beach vegetation
+  dune_grass:        [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val:  1.5 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  8.0 },
+                      { param: 'nbs_density',   label: 'density',   step: 10,   val:  300 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.05, val: 0.70 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  0.5 }],
+  dune_shrub:        [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val:  2.0 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  8.0 },
+                      { param: 'nbs_density',   label: 'density',   step: 5,    val:   30 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.1,  val:  2.0 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  1.0 }],
+  beach_grass:       [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val:  0.5 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  3.0 },
+                      { param: 'nbs_density',   label: 'density',   step: 10,   val:  150 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.05, val: 0.40 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  0.6 }],
+  beach_forbs:       [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val:  0.3 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  2.0 },
+                      { param: 'nbs_density',   label: 'density',   step: 10,   val:  100 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.05, val: 0.15 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  0.5 }],
+  // Marsh vegetation
+  low_marsh:         [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -0.3 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  1.0 },
+                      { param: 'nbs_density',   label: 'density',   step: 20,   val:  400 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.05, val:  1.0 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  1.5 }],
+  high_marsh:        [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val:  0.3 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  1.2 },
+                      { param: 'nbs_density',   label: 'density',   step: 50,   val: 1000 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.05, val: 0.30 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  1.0 }],
+  marsh_shrub:       [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val:  0.0 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  1.5 },
+                      { param: 'nbs_density',   label: 'density',   step: 5,    val:   50 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.1,  val:  1.5 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  0.6 }],
+  phragmites:        [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -0.3 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  1.5 },
+                      { param: 'nbs_density',   label: 'density',   step: 10,   val:  200 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.1,  val:  2.5 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  3.0 }],
+  // Mangrove
+  mangrove:          [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -1.0 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val:  1.5 },
+                      { param: 'nbs_density',   label: 'density',   step: 1,    val:    2 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.1,  val:  2.0 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  1.5 }],
+  // Submerged aquatic vegetation
+  eelgrass:          [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -2.0 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val: -0.2 },
+                      { param: 'nbs_density',   label: 'density',   step: 50,   val:  500 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.05, val:  0.5 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  0.4 }],
+  kelp:              [{ param: 'nbs_z_min',     label: 'z_min',     step: 0.1,  val: -6.0 },
+                      { param: 'nbs_z_max',     label: 'z_max',     step: 0.1,  val: -2.0 },
+                      { param: 'nbs_density',   label: 'density',   step: 1,    val:   10 },
+                      { param: 'nbs_height',    label: 'height',    step: 0.1,  val:  2.0 },
+                      { param: 'nbs_cd',        label: 'C_d',       step: 0.1,  val:  0.3 }],
+};
+
+function linspace(a, b, n) {
+  n = Math.max(1, Math.min(ENS_MAX, n | 0));
+  if (n === 1) return [(a + b) / 2];
+  var step = (b - a) / (n - 1), arr = new Array(n);
+  for (var i = 0; i < n; i++) arr[i] = a + i * step;
+  return arr;
+}
+
+function _fmt(x) {
+  if (!isFinite(x)) return String(x);
+  var ax = Math.abs(x);
+  if (ax !== 0 && (ax < 1e-3 || ax >= 1e4)) return x.toExponential(2);
+  return Number(x.toPrecision(3)).toString();
+}
+
+function updateNumericPreview() {
+  var param = document.getElementById('ens-param').value;
+  if (!param || !sweepDefaults[param]) return;
+  var min = Number(document.getElementById('ens-min').value);
+  var max = Number(document.getElementById('ens-max').value);
+  var n   = Number(document.getElementById('ens-n').value);
+  var pv  = document.getElementById('ens-preview');
+  if (!isFinite(min) || !isFinite(max) || !isFinite(n) || n < 1) {
+    pv.textContent = 'Values: (fill min, max, N)';
+    return;
+  }
+  pv.textContent = 'Values: ' + linspace(min, max, n).map(_fmt).join(', ');
+}
+
+// Render a checkbox grid of NHI kinds into the given container, using
+// the supplied kinds-table. Same DOM shape and behavior is reused for
+// the NHI Scoping tab — the structure is generic so we could spin up
+// another scoping list later just by passing a different table.
+function renderKindList(containerId, kindsTable) {
+  var list = document.getElementById(containerId);
+  if (!list) return;
+  Object.keys(kindsTable).forEach(function (kind) {
+    var row = document.createElement('div');
+    row.className = 'ens-nbs-row';
+    var fields = kindsTable[kind].map(function (f) {
+      return '<label>' + f.label +
+             ' <input type="number" step="' + f.step + '" data-param="' + f.param +
+             '" value="' + f.val + '"></label>';
+    }).join('');
+    row.innerHTML =
+      '<label class="ens-cb"><input type="checkbox" class="ens-nbs-cb" value="' + kind + '">' + kind + '</label>' +
+      '<div class="ens-nbs-params hidden">' + fields + '</div>';
+    list.appendChild(row);
+    var cb = row.querySelector('.ens-nbs-cb');
+    var params = row.querySelector('.ens-nbs-params');
+    cb.addEventListener('change', function () {
+      params.classList.toggle('hidden', !cb.checked);
+    });
+  });
+}
+
+function setupEnsembleTab() {
+  var paramSel = document.getElementById('ens-param');
+  paramSel.addEventListener('change', function () {
+    var p = paramSel.value;
+    document.getElementById('ens-numeric').classList.toggle('hidden', !p);
+    if (p) {
+      var d = sweepDefaults[p];
+      if (d) {
+        document.getElementById('ens-min').value = d.min;
+        document.getElementById('ens-max').value = d.max;
+        document.getElementById('ens-n').value   = d.n;
+      }
+      updateNumericPreview();
+    }
+  });
+  ['ens-min', 'ens-max', 'ens-n'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', updateNumericPreview);
+  });
+}
+
+function setupNhiTab() {
+  renderKindList('nhi-list', nhiKinds);
+}
+
+// Build the ensemble member list from the active sub-form.
+// Each member is `{ label, overrides }`; the server merges overrides
+// into base_params and runs the simulation.
+function buildNumericMembers(param, base) {
+  var min = Number(document.getElementById('ens-min').value);
+  var max = Number(document.getElementById('ens-max').value);
+  var n   = Number(document.getElementById('ens-n').value);
+  var values = linspace(min, max, n);
+  return values.map(function (v) {
+    var label, ovr = {};
+    if (param === 'wave_scale') {
+      ovr.hrms = Number(base.hrms || 1.0) * v;
+      if (base.storm_on) ovr.storm_hrms_peak = Number(base.storm_hrms_peak || 3.0) * v;
+      label = 'hrms × ' + v.toFixed(2);
+    } else if (param === 'period_scale') {
+      ovr.tp = Number(base.tp || 8.0) * v;
+      label = 'tp × ' + v.toFixed(2);
+    } else if (param === 'temp_offset') {
+      ovr.T_air_C   = Number(base.T_air_C   || 0) + v;
+      ovr.T_water_C = Number(base.T_water_C || 0) + v;
+      ovr.T_init_C  = Number(base.T_init_C  || 0) + v;
+      label = 'T ' + (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '°C';
+    } else {
+      ovr[param] = v;
+      label = param + ' = ' + _fmt(v);
+    }
+    return { label: label, overrides: ovr };
+  });
+}
+
+// Walk the NHI-list checkbox grid and build one `{label, overrides}`
+// member per checked row. Each row contributes its nbs_type and the
+// values from its per-kind parameter inputs.
+function buildKindMembers(containerSelector) {
+  var members = [];
+  document.querySelectorAll(containerSelector + ' .ens-nbs-row').forEach(function (row) {
+    var cb = row.querySelector('.ens-nbs-cb');
+    if (!cb.checked) return;
+    var ovr = { nbs_type: cb.value };
+    row.querySelectorAll('input[data-param]').forEach(function (input) {
+      ovr[input.getAttribute('data-param')] = Number(input.value);
+    });
+    members.push({ label: cb.value, overrides: ovr });
+  });
+  return members;
+}
+
+async function runEnsemble() {
+  var btn   = document.getElementById('ens-run');
+  var errEl = document.getElementById('error-banner');
+  var st    = document.getElementById('status-pane');
+
+  var param = document.getElementById('ens-param').value;
+  if (!param) {
+    errEl.textContent = '✗ Pick a sweep parameter.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  var base = readForm();
+  var members = buildNumericMembers(param, base);
+
+  var msgs = [];
+  if (members.length === 0) msgs.push('Need at least one ensemble value.');
+  if (members.length > ENS_MAX) {
+    msgs.push('Too many members (' + members.length + '); cap is ' + ENS_MAX + '.');
+  }
+  members.forEach(function (m) {
+    Object.keys(m.overrides).forEach(function (k) {
+      if (!isFinite(m.overrides[k])) msgs.push('Non-finite override on ' + k + '.');
+    });
+  });
+  if (msgs.length) {
+    errEl.textContent = '✗ ' + msgs.join(' · ');
+    errEl.classList.remove('hidden');
+    return;
+  }
+  errEl.classList.add('hidden');
+
+  var spec = {
+    base_params: base,
+    sweep_param: param,
+    members: members,
+    effectiveness_threshold_z: Number(document.getElementById('ens-threshold').value),
+  };
+
+  btn.disabled = true; btn.textContent = 'Running ensemble…';
+  st.textContent = 'Ensemble: ' + (members.length + 1) + ' sims (1 baseline + ' + members.length + ' members)…';
+
+  try {
+    var res = await fetch(API_BASE + '/run_ensemble', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(spec),
+    });
+    var data;
+    try { data = await res.json(); }
+    catch (_) { throw new Error('Server returned non-JSON (HTTP ' + res.status + ')'); }
+    if (!res.ok || data.status === 'error') {
+      throw new Error(data.message || ('Server returned HTTP ' + res.status));
+    }
+    var nOk = data.members.filter(function (m) { return m.status === 'ok'; }).length;
+    st.textContent = 'Ensemble done: ' + nOk + '/' + data.members.length + ' members ok.';
+    renderEnsemble(data);
+  } catch (e) {
+    errEl.textContent = '✗ ' + ((e && e.message) || e);
+    errEl.classList.remove('hidden');
+    st.textContent = 'ENSEMBLE ERROR';
+    console.error('runEnsemble failed:', e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Run ensemble';
+  }
+}
+
+// Render a baseline + N-member comparison into the supplied card.
+// Shared between the Ensemble tab and the NHI Scoping tab — the only
+// difference between the two is which divs they target. `cfg` carries
+// the target DOM IDs and a header tag used in the summary.
+function renderComparison(data, cfg) {
+  document.getElementById(cfg.cardId).classList.remove('hidden');
+  if (typeof Plotly === 'undefined') {
+    pushBootError('Plotly not available — skipping ' + cfg.kind + ' render.');
+    return;
+  }
+  var members = data.members || [];
+
+  // ---- Profile overlay: one trace per ok member, plus initial bed -----
+  var profileTraces = [];
+  var baseline = members[0];
+  if (baseline && baseline.status === 'ok') {
+    profileTraces.push({
+      x: baseline.x, y: baseline.z_initial,
+      mode: 'lines', type: 'scatter', name: 'Initial bed',
+      line: { color: '#999', width: 1, dash: 'dot' },
+    });
+  }
+  members.forEach(function (m, i) {
+    if (m.status !== 'ok') return;
+    var isBaseline = (i === 0);
+    profileTraces.push({
+      x: m.x, y: m.z_final, mode: 'lines', type: 'scatter',
+      name: isBaseline ? 'Baseline' : m.label,
+      line: {
+        color: isBaseline ? '#000' : viridis(i - 1, Math.max(1, members.length - 1)),
+        width: isBaseline ? 2.5 : 1.8,
+      },
+    });
+  });
+  Plotly.newPlot(cfg.profileId, profileTraces, {
+    xaxis: { title: 'Cross-shore distance (m)' },
+    yaxis: { title: 'Elevation (m)' },
+    margin: { t: 8, r: 24, b: 40, l: 50 },
+    legend: { x: 1, y: 1, xanchor: 'right' },
+  }, { responsive: true, displaylogo: false, displayModeBar: true,
+       toImageButtonOptions: { format: 'png', scale: 2 } });
+
+  // ---- Effectiveness bars: % reduction vs baseline ---------------------
+  var barLabels = [], barValues = [], barColors = [];
+  members.forEach(function (m, i) {
+    if (m.status !== 'ok') return;
+    barLabels.push(i === 0 ? 'Baseline' : m.label);
+    barValues.push(isFinite(m.reduction_pct) ? m.reduction_pct : 0);
+    barColors.push(i === 0 ? '#000'
+                           : viridis(i - 1, Math.max(1, members.length - 1)));
+  });
+  Plotly.newPlot(cfg.barId, [{
+    type: 'bar', x: barLabels, y: barValues, marker: { color: barColors },
+    text: barValues.map(function (v) { return v.toFixed(0) + '%'; }),
+    textposition: 'outside',
+  }], {
+    yaxis: { title: 'Erosion reduction vs. baseline (%)', zeroline: true },
+    xaxis: { tickangle: -30, automargin: true },
+    margin: { t: 8, r: 24, b: 120, l: 60 },
+    shapes: [{ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0,
+               line: { color: '#666', width: 1 } }],
+  }, { responsive: true, displaylogo: false, displayModeBar: true,
+       toImageButtonOptions: { format: 'png', scale: 2 } });
+
+  // ---- Plain-text summary ----------------------------------------------
+  var lines = ['# ' + cfg.kind +
+               ' (sweep: ' + (data.sweep_param || '—') +
+               ', threshold z=' + data.threshold_z + ' m)'];
+  members.forEach(function (m, i) {
+    if (m.status !== 'ok') {
+      lines.push((i === 0 ? 'baseline' : m.label) + '  ERROR: ' + m.message);
+    } else {
+      lines.push(
+        (i === 0 ? 'baseline' : m.label).padEnd(28) +
+        ' erosion=' + m.erosion_above_z.toFixed(2) + ' m³/m' +
+        '  reduction=' +
+        (isFinite(m.reduction_pct) ? m.reduction_pct.toFixed(1) + '%' : 'n/a') +
+        '  (' + m.elapsed_s.toFixed(1) + 's)'
+      );
+    }
+  });
+  document.getElementById(cfg.summaryId).textContent = lines.join('\n');
+}
+
+function renderEnsemble(data) {
+  renderComparison(data, {
+    kind: 'Ensemble',
+    cardId:    'ens-card',
+    profileId: 'plot-ens-profiles',
+    barId:     'plot-ens-bars',
+    summaryId: 'ens-summary',
+  });
+}
+
+function renderNhi(data) {
+  renderComparison(data, {
+    kind: 'NHI Scoping',
+    cardId:    'nhi-card',
+    profileId: 'plot-nhi-profiles',
+    barId:     'plot-nhi-bars',
+    summaryId: 'nhi-summary',
+  });
+}
+
+async function runNhi() {
+  var btn   = document.getElementById('nhi-run');
+  var errEl = document.getElementById('error-banner');
+  var st    = document.getElementById('status-pane');
+
+  var base = readForm();
+  var members = buildKindMembers('#nhi-list');
+
+  var msgs = [];
+  if (members.length === 0) msgs.push('Check at least one NHI option to compare.');
+  if (members.length > ENS_MAX) {
+    msgs.push('Too many members (' + members.length + '); cap is ' + ENS_MAX + '.');
+  }
+  if (msgs.length) {
+    errEl.textContent = '✗ ' + msgs.join(' · ');
+    errEl.classList.remove('hidden');
+    return;
+  }
+  errEl.classList.add('hidden');
+
+  var spec = {
+    base_params: base,
+    sweep_param: 'nbs_type',
+    members: members,
+    effectiveness_threshold_z: Number(document.getElementById('nhi-threshold').value),
+  };
+
+  btn.disabled = true; btn.textContent = 'Running NHI scoping…';
+  st.textContent = 'NHI scoping: ' + (members.length + 1) + ' sims (1 baseline + ' +
+                   members.length + ' members)…';
+
+  try {
+    var res = await fetch(API_BASE + '/run_ensemble', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(spec),
+    });
+    var data;
+    try { data = await res.json(); }
+    catch (_) { throw new Error('Server returned non-JSON (HTTP ' + res.status + ')'); }
+    if (!res.ok || data.status === 'error') {
+      throw new Error(data.message || ('Server returned HTTP ' + res.status));
+    }
+    var nOk = data.members.filter(function (m) { return m.status === 'ok'; }).length;
+    st.textContent = 'NHI scoping done: ' + nOk + '/' + data.members.length + ' members ok.';
+    renderNhi(data);
+  } catch (e) {
+    errEl.textContent = '✗ ' + ((e && e.message) || e);
+    errEl.classList.remove('hidden');
+    st.textContent = 'NHI SCOPING ERROR';
+    console.error('runNhi failed:', e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Run NHI scoping';
+  }
+}
+
+// ---- Boot -------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', function () {
+  try {
+    setupTabs();
+    setupConditionals();
+    setupCsvUploads();
+    setupLiveValidation();
+    setupEnsembleTab();
+    setupNhiTab();
+    document.getElementById('run-btn').addEventListener('click', runSimulation);
+    document.getElementById('ens-run').addEventListener('click', runEnsemble);
+    document.getElementById('nhi-run').addEventListener('click', runNhi);
+  } catch (e) {
+    pushBootError('UI init failed: ' + (e.message || e));
+    console.error(e);
+  }
+});
+</script>
+</body>
+</html>
