@@ -12,17 +12,10 @@ The code is under early development and therefore all features may not work or b
 
 ## Installation
 
-Install via [juliaup](https://github.com/JuliaLang/juliaup):
-
 ```bash
 curl -fsSL https://install.julialang.org | sh
 juliaup add 1.10
 juliaup default 1.10
-```
-
-Clone the repo and instantiate the project:
-
-```bash
 git clone https://github.com/ncohn/CSHORE.jl.git
 cd CSHORE.jl
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
