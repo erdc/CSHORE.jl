@@ -1,0 +1,41 @@
+# fly.toml app configuration file for cshore-jl
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+# Deploys pull a prebuilt image from Fly's own registry (built by the
+# .github/workflows/docker-publish.yml workflow on push to main).
+# `fly deploy` from a terminal will pull `:latest`; the GH Actions
+# workflow uses `--image …:<sha>` so each deploy is reproducible.
+# For an emergency one-off rebuild from the local Dockerfile, run
+# `fly deploy --dockerfile web_gui/Dockerfile` to override.
+
+app = 'cshore-jl'
+primary_region = 'yyz'
+
+[build]
+  image = 'registry.fly.io/cshore-jl:latest'
+
+[env]
+  HOST = '0.0.0.0'
+  JULIA_DEPOT_PATH = '/app/.julia'
+  JULIA_PROJECT = '/app/web_gui'
+  PORT = '8000'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 50
+    soft_limit = 20
+
+[[vm]]
+  size = 'shared-cpu-4x'
+  cpu_kind = 'shared'
+  cpus = 4
+  memory_mb = 8192

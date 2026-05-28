@@ -1,0 +1,20 @@
+# LEAN VARIANT for Fly.io: drops the entire Stipple / Genie / StippleUI
+# web stack and replaces it with HTTP.jl + handwritten HTML/JS. The web
+# server becomes one Julia file (~250 lines), the UI is a static HTML
+# page that POSTs form JSON to /run and renders the response via
+# Plotly.js (loaded from CDN).
+#
+# Floor estimate from earlier benchmarking: ~125 packages with NCDatasets
+# + CSHORE + HTTP.jl + JSON3. Cold compile ~2-3 min.
+
+[deps]
+CSHORE     = "a1c92f1e-4d5b-4a7e-9f8c-2b3c4d5e6f70"
+HTTP       = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON3      = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+
+[compat]
+HTTP       = "1"
+JSON3      = "1"
+NCDatasets = "0.14"
+julia      = "1.10"
