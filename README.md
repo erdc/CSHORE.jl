@@ -6,6 +6,8 @@ Julia port of the original FORTRAN CSHORE
 ([erdc/cshore](https://github.com/erdc/cshore)), with extensions for Arctic
 thermal / active-layer processes and multi-fraction sediment transport.
 
+The code is under early development and therefore all features may not work or be fully tested.
+
 ---
 
 ## Installation
