@@ -6,13 +6,11 @@ Julia port of the original FORTRAN CSHORE
 ([erdc/cshore](https://github.com/erdc/cshore)), with extensions for Arctic
 thermal / active-layer processes and multi-fraction sediment transport.
 
-This README is a usage guide.
-
 ---
 
 ## Installation
 
-Requires **Julia 1.10 LTS**. Install via [juliaup](https://github.com/JuliaLang/juliaup):
+Install via [juliaup](https://github.com/JuliaLang/juliaup):
 
 ```bash
 curl -fsSL https://install.julialang.org | sh
@@ -27,8 +25,6 @@ git clone https://github.com/ncohn/CSHORE.jl.git
 cd CSHORE.jl
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
-
-First run takes ~5–10 minutes (downloads `NCDatasets`, `FFTW`, etc. and precompiles).
 
 ---
 
@@ -47,62 +43,15 @@ and produces a multi-panel result figure.
 | Windows  | Double-click [`qml_gui/run_qml.bat`](qml_gui/run_qml.bat)               |
 | Linux    | `./qml_gui/run_qml.sh` from a terminal                                  |
 
-You can also invoke directly:
-
-```bash
-julia --threads=auto --project=qml_gui qml_gui/cshore_qml.jl
-```
-
-First launch installs QML.jl + Qt6 binaries (~300 MB). Subsequent launches start in
-seconds.
-
-### Test inputs
-
-Sample bathymetry, wave, and thermal-forcing CSVs live under
-[`qml_gui/example_csvs/`](qml_gui/example_csvs/). To regenerate them:
-
-```bash
-julia qml_gui/example_csvs/generate_examples.jl
-```
-
-A typical thermal demo: load `bathy_beach_dune.csv` + `waves_year.csv` + tick
-*Enable thermal model* + load `temps_arctic_year.csv`. Click **Run simulation**.
-
 ---
-
-## Running the benchmark suites
-
-Three tracked benchmark sets under [`examples/benchmarks/`](examples/benchmarks/).
-
-### ERDC USACE testbed
-
-Eight historical cases (`agate_oct`, `agate_sep`, `frf_morpho_070`, `frf_morpho_071`,
-`frf_runup_2`, `frf_runup_3`, `gee`, `lstf`) with reference outputs. Used for
-parity testing against FORTRAN CSHORE_USACE.
+## Running CSHORE Benchmark Cases
 
 ```bash
 julia --project=. examples/benchmarks/erdc_usace/run_benchmarks.jl
 julia --project=. examples/benchmarks/erdc_usace/plot_benchmarks.jl
 ```
 
-Each case lives under `examples/benchmarks/erdc_usace/cases/<name>/` with a
-FORTRAN `.infile`. The runner reads each, runs `CSHORE.jl`, and tabulates wave-height /
-setup / runup metrics against the reference solution. See
-[`examples/benchmarks/erdc_usace/README.md`](examples/benchmarks/erdc_usace/README.md).
-
-### XBeach reference cases
-
-Three cases (`Boers_1C`, `DUROS_7000308`, `GWK98_F1`) cross-validating against
-XBeach output:
-
-```bash
-julia --project=. examples/benchmarks/xbeach/run_xbeach_benchmarks.jl
-julia --project=. examples/benchmarks/xbeach/lip_11d_test_1c.jl
-```
-
-See [`examples/benchmarks/xbeach/README.md`](examples/benchmarks/xbeach/README.md).
-
-### Analytical benchmarks
+## Analytical Benchmarks
 
 Seven simple cases with closed-form expected solutions (linear shoaling, Snell's
 refraction, Dean equilibrium profile, undertow balance, longshore current, etc.):
@@ -119,18 +68,13 @@ done
 
 Three input paths are supported. Pick whichever fits your workflow.
 
-### 1. FORTRAN-compatible `.infile` (legacy USACE workflows)
+### 1. FORTRAN-compatible `.infile` for legacy USACE workflows
 
 ```julia
 using CSHORE
 cfg = read_infile("path/to/run.infile")
 run_simulation!(cfg; outfile="run.nc", outdir="./out")
 ```
-
-`read_infile` parses the standard CSHORE_USACE `.infile` format including ERDC
-`-->` annotations. Fixtures are in [`test/fixtures/`](test/fixtures/) and the ERDC
-cases under `examples/benchmarks/erdc_usace/cases/<name>/` (the file simply named
-`infile`).
 
 ### 2. CSHORE.jl native `.cshore` TOML
 
@@ -157,7 +101,7 @@ cfg = read_cshorejl("example.cshore")
 run_simulation!(cfg; outfile="example.nc")
 ```
 
-### 3. Programmatic config (most flexibility for tests + Julia-native workflows)
+### 3. Programmatic config
 
 ```julia
 cfg = build_config(;
@@ -177,10 +121,6 @@ cfg = build_config(;
 )
 run_simulation!(cfg; outfile = "out.nc")
 ```
-
-For thermal / permafrost coupling, additionally pass `thermal = ThermalConfig()`,
-plus `thermal_time`, `T_air`, `T_water` time series.
-
 ---
 
 ## Output format
@@ -196,11 +136,7 @@ plus `thermal_time`, `T_air`, `T_water` time series.
 
 **2D fields** `(x, time)`: `zb`, `zb_hard`, `hrms`, `wsetup`, `sigma`, `umean`,
 `ustd`, `qbreak`, `q_total`, `pwet`, `hwd`. With thermal: `ALT`, `T_surface`.
-**3D per-fraction**: `qbx`, `qsx`, `bed_mass`. **Multifraction-only diagnostics**:
-`d50_surface`, `d50_bulk`.
-
-Read back with [`NCDatasets.jl`](https://github.com/JuliaGeo/NCDatasets.jl), QGIS,
-ArcGIS, ncview, or [`xarray`](https://xarray.dev/) in Python.
+**3D per-fraction**: `qbx`, `qsx`, `bed_mass`. 
 
 ---
 
@@ -209,11 +145,6 @@ ArcGIS, ncview, or [`xarray`](https://xarray.dev/) in Python.
 ```bash
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
-
-The suite covers the wave / hydro / sediment kernels, the `.infile` parser, the
-NetCDF writer, the BMI wrapper, the provenance tracker, and the ERDC USACE
-benchmark regressions.
-
 ---
 
 ## Repository layout
@@ -245,7 +176,9 @@ src/
 │   ├── erosion.jl
 │   ├── diffusion.jl
 │   └── avalanche.jl
-│
+│   └── cohesive.jl
+│   └── clay_dike_erosion.jl
+|
 ├── aeolian/
 │   ├── aeolian.jl
 │   └── wind_shear.jl
