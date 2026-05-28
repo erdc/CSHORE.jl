@@ -1,0 +1,86 @@
+# =============================================================================
+# Publish web_gui/public to GitHub Pages.
+#
+# The page is a pure-static UI that POSTs scenario JSON to the Fly-hosted
+# Julia backend. The only build-time step is injecting a tiny inline script
+# that points `window.CSHORE_API_BASE` at the backend URL — the canonical
+# `index.html` keeps API_BASE='' so a same-origin deployment (when the Fly
+# server itself serves the HTML) still works without modification.
+#
+# Required repo configuration (one-time):
+#   Settings → Pages → Build and deployment → Source = "GitHub Actions"
+#
+# Optional secret/variable:
+#   CSHORE_API_BASE  (repository variable, not a secret — it's public)
+#     The URL of the live backend the Pages-hosted page should call,
+#     e.g. https://cshore-jl-webapp.fly.dev. Defaults to that value when the
+#     variable is unset, so the workflow works out of the box.
+# =============================================================================
+name: deploy-pages
+
+on:
+  push:
+    branches: [web_gui]
+    paths:
+      - 'web_gui/public/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage Pages artifact
+        env:
+          API_BASE: ${{ vars.CSHORE_API_BASE || 'https://cshore-jl-webapp.fly.dev' }}
+        run: |
+          set -e
+          mkdir -p _pages
+          # Copy the static UI verbatim.
+          cp -R web_gui/public/. _pages/
+          # Inject a one-line CSHORE_API_BASE override right before the
+          # FIRST bare `<script>` tag in the file (the canonical HTML has
+          # one — the main inline UI script). Use awk for portability;
+          # GNU sed's `0,/pattern/` range is not portable to BSD sed.
+          INJECT="<script>window.CSHORE_API_BASE = \"${API_BASE}\";</script>"
+          awk -v inject="$INJECT" '
+            !done && $0 ~ /^<script>$/ { print inject; done = 1 }
+            { print }
+          ' _pages/index.html > _pages/index.html.new
+          mv _pages/index.html.new _pages/index.html
+          # Fail loudly if the injection somehow missed
+          grep -q "window.CSHORE_API_BASE = \"${API_BASE}\"" _pages/index.html || {
+            echo "ERROR: CSHORE_API_BASE injection did not land in index.html"
+            exit 1
+          }
+          echo "Injected CSHORE_API_BASE='${API_BASE}'"
+          echo "--- injection context (lines 340–355) ---"
+          sed -n '340,355p' _pages/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _pages
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
