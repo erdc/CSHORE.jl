@@ -1,0 +1,36 @@
+# Generated from: /Users/ncohn/Documents/GitHub/CSHORE.jl/examples/benchmarks/erdc_usace/cases/frf_runup_3/infile
+# Converted by cshorejl on 26-Apr-2026 12:55:28
+
+[options]
+iprofl = 0
+iangle = 1
+iroll = 0
+iover = 0
+ilab = 1.000000e-02
+iveg = 8.000000e-01
+iperm = 0
+iwind = 0
+iwcint = 20
+itide = 1
+ismooth = 20
+iasym = 0
+
+[grid]
+dx = 10.0877
+
+[bathymetry]
+file = "bathy.csv"
+
+[sediment]
+d50 = NaN
+sg = 2.65
+porosity = 0.4
+shield = 0.05
+tanphi = 0.63
+blp = 0.002
+
+[boundary]
+bc_file = "waves.csv"
+
+gamma = 1.1851
+

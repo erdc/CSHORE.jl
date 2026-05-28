@@ -1,0 +1,6 @@
+transect = 7000308
+P_f = 1.0e-005
+water level = 4.775
+wave height = 10.432
+peak wave period = 16.981
+D50 grain size = 0.000229

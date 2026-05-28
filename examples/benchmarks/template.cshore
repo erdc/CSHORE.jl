@@ -1,0 +1,128 @@
+# CSHORE.jl native input format — full reference template
+# All file paths are relative to this file's directory.
+# Read with: cfg = read_cshorejl("template.cshore")
+
+# ─── Physics toggles ────────────────────────────────────────────────────────
+[options]
+iprofl        = 1       # 0=fixed bed, 1=morphodynamic, 2=dike erosion
+iroll         = 0       # 1 = roller model
+iwcint        = 0       # 1 = wave-current interaction
+iasym         = 0       # 0=none, 1=Ruessink2012, 2=Stokes-2nd-order wave asymmetry
+iangle        = 0       # 1 = oblique wave incidence
+iover         = 0       # 1 = overtopping / runup
+iveg          = 0       # 0=none, 1=phase-avg drag, 2=phase-resolved, 3=full
+iperm         = 0       # 1 = porous bed / gravel (requires [porous])
+iwind         = 0       # 1 = wind stress (requires w10 in [boundary])
+iaeolian      = 0       # 1 = aeolian dune transport (requires [aeolian])
+icurrent      = 0       # 1 = prescribed longshore current (requires [current])
+iv_transport  = 0       # 1 = include V in bed-shear entrainment
+iwcint_along  = 0       # 1 = add alongshore Doppler to WCI (needs iwcint+iangle=1)
+isedav        = 0       # 0=unlimited sand, 1=hardbottom (needs hardbottom_file in [bathymetry])
+
+# ─── Breaker index ──────────────────────────────────────────────────────────
+gamma         = 0.78    # breaker index (used when gamma_method = "constant")
+gamma_method  = "constant"  # "constant" or "ruessink2003"
+# gamma_a     = 0.76    # Ruessink (2003) kh-slope   (only used with ruessink2003)
+# gamma_b     = 0.29    # Ruessink (2003) intercept
+# gamma_min   = 0.35
+# gamma_max   = 0.90
+facSK         = 1.0     # wave-skewness coupling for bedload (IASYM=1)
+facAS         = 0.0     # wave-asymmetry coupling for bedload
+
+# ─── Grid ───────────────────────────────────────────────────────────────────
+[grid]
+dx = 1.0                # cross-shore grid spacing (m)
+
+# ─── Bathymetry ─────────────────────────────────────────────────────────────
+[bathymetry]
+file    = "bathy.csv"   # two-column CSV: x (m), z (m, positive up)
+                        # optional third column: friction (fw) per node
+friction = 0.002        # uniform friction factor (used when fw not in file)
+# hardbottom_file = "hb.csv"  # one-column CSV of z_hard per bathymetry node (ISEDAV=1)
+
+# ─── Sediment ───────────────────────────────────────────────────────────────
+[sediment]
+d50     = 3e-4          # median grain size (m)
+sg      = 2.65          # specific gravity
+effb    = 0.005         # wave-breaking efficiency (bedload)
+efff    = 0.005         # friction efficiency (bedload)
+slp     = 0.2           # suspended-load parameter
+tanphi  = 0.63          # tan of angle of repose
+blp     = 2e-3          # bedload parameter
+# wf    = 0.026         # fall velocity (m/s); omit to auto-compute (Soulsby 1997)
+
+# ─── Multifraction (optional) ───────────────────────────────────────────────
+[multifraction]
+grain_sizes         = [1.5e-4, 3.0e-4, 6.0e-4]   # per-fraction D50 (m)
+initial_fractions   = [0.30, 0.50, 0.20]           # must sum to 1.0
+nlayers             = 3                             # vertical bed layers
+layer_thickness     = 0.10                          # layer thickness (m)
+porosity            = 0.40
+transport_formula   = "size_adaptive"   # "original" | "size_adaptive" | "soulsby_vanrijn"
+# fractions_file = "fracs.csv"  # optional: nx × nf CSV for spatially-varying init
+
+# ─── Boundary conditions ────────────────────────────────────────────────────
+[boundary]
+# Option A — external CSV (recommended for long runs):
+bc_file = "waves.csv"   # columns: time (s), hrms (m), tp (s), swl (m) [, wangle (deg)]
+
+# Option B — inline arrays (convenient for short tests):
+# timebc = [0.0, 3600.0, 7200.0]
+# hrmsbc = [1.0, 1.5, 1.0]
+# tpbc   = [8.0, 10.0, 8.0]
+# swlbc  = [0.0, 0.5, 0.0]
+# wangbc = [0.0, 0.0, 0.0]
+
+# Wind (required when options.iwind = 1):
+# wind_file = "wind.csv"   # columns: time, w10 (m/s), wangle (deg), windcd
+
+# ─── Aeolian transport (optional — enable with iaeolian = 1) ────────────────
+# [aeolian]
+# active          = true
+# z_contour       = 2.5          # vegetation contour elevation (m)
+# decay_length    = 1.0          # exponential ramp-up above contour (m, 0=sharp)
+# Ck              = 1.8          # Kawamura coefficient
+# z_meas          = 10.0         # anemometer height (m)
+# runup_buffer    = 0.0          # dry-beach seaward edge above SWL (m)
+# saturation_length = 5.0        # fetch-saturation length scale (m)
+# dune_decay_length = 5.0        # deposition decay length inside deposition zone (m)
+
+# ─── Thermal / permafrost (optional) ────────────────────────────────────────
+# [thermal]
+# active          = true
+# nz              = 30           # vertical cells per column
+# dz              = 0.1          # cell thickness (m)
+# k_frozen        = 1.5          # thermal conductivity frozen (W/m/K)
+# k_thawed        = 0.8
+# C_frozen        = 1.8e6        # volumetric heat capacity frozen (J/m³/K)
+# C_thawed        = 3.0e6
+# moisture        = 0.35         # volumetric soil moisture
+# T_init          = -5.0         # initial temperature (°C)
+# T_lower         = -5.0         # fixed bottom-of-column temperature (°C)
+# thermal_bc_file = "climate.csv"  # columns: time (s), T_air (°C), T_water (°C) [, snow_depth (m)]
+
+# ─── Porous layer / gravel beach (optional — enable with iperm = 1) ─────────
+# [porous]
+# porosity        = 0.40
+# stone_diameter  = 0.05         # nominal stone diameter D_n50 (m)
+# porous_file     = "porous.csv" # columns: x (m), z_bottom (m) — bottom of porous layer
+
+# ─── Vegetation (optional — enable with iveg = 1, 2, or 3) ─────────────────
+# [vegetation]
+# vegcd           = 1.0          # drag coefficient
+# veg_file        = "veg.csv"    # columns: x (m), vegn (stems/m²), vegb (m), vegd (m), vegh (m)
+
+# ─── Hillslope diffusion (optional) ─────────────────────────────────────────
+# [diffusion]
+# active          = true
+# D_base          = 0.01         # base diffusivity (m²/day)
+# critical_slope  = 0.7          # critical slope (rad)
+# thermal_control = true         # block diffusion in frozen cells
+
+# ─── Tidal / longshore gradient (optional — enable with itide = 1) ──────────
+# [tidal]
+# file = "tide.csv"              # columns: time (s), detady (m/m) [, dswldt (m/s)]
+
+# ─── Prescribed longshore current (optional — enable with icurrent = 1) ─────
+# [current]
+# file = "current.csv"           # columns: time (s), vbc (m/s)

@@ -1,0 +1,36 @@
+# Generated from: /Users/ncohn/Documents/GitHub/CSHORE.jl/examples/benchmarks/erdc_usace/cases/lstf/infile
+# Converted by cshorejl on 26-Apr-2026 12:55:33
+
+[options]
+iprofl = 1
+iangle = 0
+iroll = 1
+iover = 0
+ilab = 5.000000e-01
+iveg = 0
+iperm = 0
+iwind = 0
+iwcint = 1.500000e-01
+itide = 0
+ismooth = 1.650000e-02
+iasym = 2.650000e+00
+
+[grid]
+dx = 0.002
+
+[bathymetry]
+file = "bathy.csv"
+
+[sediment]
+d50 = 3e-06
+sg = 0.02
+porosity = 1
+shield = 3
+tanphi = 1800
+blp = 0.003
+
+[boundary]
+bc_file = "waves.csv"
+
+gamma = 0.004
+
